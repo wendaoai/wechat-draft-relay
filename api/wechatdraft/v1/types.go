@@ -2,16 +2,30 @@ package v1
 
 import "time"
 
+type CropPercent struct {
+	Ratio string `json:"ratio"`
+	X1    string `json:"x1"`
+	Y1    string `json:"y1"`
+	X2    string `json:"x2"`
+	Y2    string `json:"y2"`
+}
+
+type CoverInfo struct {
+	CropPercentList []CropPercent `json:"cropPercentList,omitempty"`
+}
+
 type Article struct {
-	ArticleType        string   `json:"articleType,omitempty"`
-	ImageIDs           []string `json:"imageIds,omitempty"`
-	Title              string   `json:"title"`
-	Author             string   `json:"author"`
-	Digest             string   `json:"digest"`
-	ContentHTML        string   `json:"contentHtml"`
-	ContentSourceURL   string   `json:"contentSourceUrl"`
-	NeedOpenComment    int      `json:"needOpenComment"`
-	OnlyFansCanComment int      `json:"onlyFansCanComment"`
+	ArticleType        string     `json:"articleType,omitempty"`
+	ImageIDs           []string   `json:"imageIds,omitempty"`
+	Title              string     `json:"title"`
+	Author             string     `json:"author"`
+	Digest             string     `json:"digest"`
+	ContentText        string     `json:"contentText,omitempty"`
+	ContentHTML        string     `json:"contentHtml"`
+	ContentSourceURL   string     `json:"contentSourceUrl"`
+	CoverInfo          *CoverInfo `json:"coverInfo,omitempty"`
+	NeedOpenComment    int        `json:"needOpenComment"`
+	OnlyFansCanComment int        `json:"onlyFansCanComment"`
 }
 
 type Image struct {

@@ -35,16 +35,22 @@
 | --- | --- |
 | `schemaVersion` | 整数，普通图文用 `1`，图片消息用 `2` |
 | `appid`、`uuid`、`appsecret` | 创建时发送三个字符串，AppSecret 最多 256 字节 |
-| `article.title`、`article.contentHtml` | 必填字符串，标题非空，正文为非空 HTML 片段 |
+| `article.title` | 必填字符串，标题非空 |
+| `article.contentHtml` | 普通图文必填，为非空 HTML 片段。图片消息见下文 |
+| `article.contentText` | 图片消息的纯文本配文，使用 `schemaVersion=2` |
 | `article.author`、`article.digest` | 选填字符串，分别为作者和摘要 |
 | `article.contentSourceUrl` | 选填字符串，最多 1024 字节的 HTTP(S) URL，不带用户名或密码 |
 | `article.needOpenComment`、`article.onlyFansCanComment` | 选填整数，`0` 或 `1`，默认 `0`。关闭评论时仅粉丝可评论也归为 `0` |
-| `coverImageId` | 必填字符串，指向 `images` 中唯一的 `cover` 项 |
+| `coverImageId` | 普通图文必填，指向 `images` 中唯一的 `cover` 项。图片消息见下文 |
 | `images` | 必填数组，每项包含 `id`、`role`、`fileField`、`sha256` 四个字符串。`role` 为 `cover` 或 `body`，`id` 允许 1–64 个字母、数字、下划线或短横线，`fileField` 为 `file_` 加 `id`，`sha256` 为上传文件的 64 位小写十六进制 SHA-256 |
 
 正文插图使用 `<img src="cw-image://photo1" alt="示例">`，同时声明一项 `id=photo1`、`role=body`、`fileField=file_photo1`，再上传对应文件。每个 `body` 项都需要在正文中被引用。封面支持 PNG/JPEG，正文图片支持 PNG/JPEG/GIF。正文传片段和内联样式，不带完整 HTML 文档、脚本、SVG 或远程图片地址。单次 HTTP 请求总量最多 256 MiB。
 
-普通图文省略 `article.articleType` 或传 `news`。图片消息使用 `schemaVersion=2`、`article.articleType="newspic"` 和 `article.imageIds`，后者是按展示顺序排列的 1–20 个 `body` 图片 ID。首张展示图用作微信侧封面，上传清单仍需单独提供一项 `cover`。`article.contentHtml` 仍需引用正文图片，`article.digest` 用作图片消息说明。
+普通图文省略 `article.articleType` 或传 `news`。图片消息使用 `schemaVersion=2`、`article.articleType="newspic"` 和 `article.imageIds`，后者是按展示顺序排列的 1–20 个 `body` 图片 ID。首张展示图用作微信侧封面。
+
+- 新接入可用 `article.contentText` 传非空纯文本配文，保留原有换行，少于 20,000 字符及 1 MiB。标题最多 32 字，可选摘要 `article.digest` 最多 120 字。`images` 仅声明 `imageIds` 引用的 `body` 图片，省略 `coverImageId` 和 `article.contentHtml` 或留空。
+- 已接入的旧格式仍可提交 `coverImageId`、`cover` 图片和引用正文图片的 `article.contentHtml`。此时 `article.digest` 继续作为配文，超过 120 字时仅发送给微信的 `content` 字段。Relay 接收并校验旧格式的封面文件，向微信提交贴图时上传正文图片。
+- `schemaVersion=2` 可选 `article.coverInfo.cropPercentList`。每项包含 `ratio`、`x1`、`y1`、`x2`、`y2`。坐标使用 `[0, 1]` 范围内最多 6 位小数的字符串，满足 `x1 < x2` 和 `y1 < y2`。每种比例最多一项，普通图文和图片消息均接受 `1_1`、`2.35_1`，图片消息还接受 `16_9`。
 
 ### 可复制示例
 

@@ -107,27 +107,40 @@ func (m *Manager) run(ctx context.Context, j *job) {
 		m.failWechat(j, ctx, we)
 		return
 	}
-	if !m.update(j, "uploading_cover", "正在上传永久封面", 2, nil) {
-		m.failLocal(j, ctx)
-		return
+	isNewspic := p.Article.ArticleType == "newspic"
+	var cover string
+	completed := 2
+	bodyMessage := "正在上传贴图图片"
+	var recordCover func(*State)
+	if !isNewspic {
+		if !m.update(j, "uploading_cover", "正在上传永久封面", 2, nil) {
+			m.failLocal(j, ctx)
+			return
+		}
+		cover, token, we = m.wechat.materialFor(ctx, j.app, j.secret, token, imagePath(dir, p.CoverImageID, r), true)
+		if we != nil {
+			m.failWechat(j, ctx, we)
+			return
+		}
+		bodyMessage = "正在上传正文图片"
+		recordCover = func(s *State) { s.Materials.CoverMediaID = cover }
 	}
-	cover, token, we := m.wechat.materialFor(ctx, j.app, j.secret, token, imagePath(dir, p.CoverImageID, r), true)
-	if we != nil {
-		m.failWechat(j, ctx, we)
-		return
+	// Legacy image messages include a cover in the stored manifest. Account for
+	// it in progress without uploading a second cover to WeChat.
+	if p.CoverImageID != "" {
+		completed++
 	}
-	if !m.update(j, "uploading_body_images", "正在上传正文图片", 3, func(s *State) { s.Materials.CoverMediaID = cover }) {
+	if !m.update(j, "uploading_body_images", bodyMessage, completed, recordCover) {
 		m.failLocal(j, ctx)
 		return
 	}
 	urls := map[string]string{}
-	completed := 3
 	for _, im := range p.Images {
 		if im.Role != "body" {
 			continue
 		}
 		var value string
-		value, token, we = m.wechat.materialFor(ctx, j.app, j.secret, token, imagePath(dir, im.ID, r), p.Article.ArticleType == "newspic")
+		value, token, we = m.wechat.materialFor(ctx, j.app, j.secret, token, imagePath(dir, im.ID, r), isNewspic)
 		if we != nil {
 			m.failWechat(j, ctx, we)
 			return
@@ -145,9 +158,12 @@ func (m *Manager) run(ctx context.Context, j *job) {
 		m.failLocal(j, ctx)
 		return
 	}
-	content := p.Article.Digest
+	content := p.Article.ContentText
 	gallery := []string{}
-	if p.Article.ArticleType == "newspic" {
+	if isNewspic {
+		if content == "" {
+			content = p.Article.Digest
+		}
 		for _, id := range p.Article.ImageIDs {
 			gallery = append(gallery, urls[id])
 		}
