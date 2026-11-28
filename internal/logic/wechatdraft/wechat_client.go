@@ -11,9 +11,12 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	v1 "github.com/wendaoai/wechat-draft-relay/api/wechatdraft/v1"
 )
+
+const newspicDigestLimit = 120
 
 type WechatError struct {
 	Fault                              v1.Fault
@@ -149,9 +152,25 @@ func wxCode(code int, draft bool) *WechatError {
 }
 func jsonReader(v any) io.Reader { b, _ := json.Marshal(v); return bytes.NewReader(b) }
 
+func encodeCoverInfo(info *v1.CoverInfo) map[string]any {
+	if info == nil || len(info.CropPercentList) == 0 {
+		return nil
+	}
+	crops := make([]map[string]string, 0, len(info.CropPercentList))
+	for _, cp := range info.CropPercentList {
+		crops = append(crops, map[string]string{
+			"ratio": cp.Ratio,
+			"x1":    cp.X1,
+			"y1":    cp.Y1,
+			"x2":    cp.X2,
+			"y2":    cp.Y2,
+		})
+	}
+	return map[string]any{"crop_percent_list": crops}
+}
+
 func (w *Wechat) Draft(ctx context.Context, token string, a v1.Article, content, cover string, gallery ...string) (string, *WechatError) {
-	article := map[string]any{"article_type": "news", "title": a.Title, "author": a.Author, "digest": a.Digest, "content": content, "thumb_media_id": cover,
-		"content_source_url": a.ContentSourceURL, "need_open_comment": a.NeedOpenComment, "only_fans_can_comment": a.OnlyFansCanComment}
+	var article map[string]any
 	if a.ArticleType == "newspic" {
 		images := make([]map[string]string, 0, len(gallery))
 		for _, id := range gallery {
@@ -163,8 +182,38 @@ func (w *Wechat) Draft(ctx context.Context, token string, a v1.Article, content,
 		if len(images) < 1 || len(images) > 20 {
 			return "", wxFailure("/cgi-bin/draft/add", "image_count", 400, false)
 		}
-		article["article_type"], article["image_info"], article["content"] = "newspic", map[string]any{"image_list": images}, a.Digest
-		article["thumb_media_id"] = gallery[0]
+		article = map[string]any{
+			"article_type":          "newspic",
+			"title":                 a.Title,
+			"content":               content,
+			"image_info":            map[string]any{"image_list": images},
+			"need_open_comment":     a.NeedOpenComment,
+			"only_fans_can_comment": a.OnlyFansCanComment,
+		}
+		if a.Author != "" {
+			article["author"] = a.Author
+		}
+		if a.Digest != "" && utf8.RuneCountInString(a.Digest) <= newspicDigestLimit {
+			article["digest"] = a.Digest
+		}
+		if a.ContentSourceURL != "" {
+			article["content_source_url"] = a.ContentSourceURL
+		}
+	} else {
+		article = map[string]any{
+			"article_type":          "news",
+			"title":                 a.Title,
+			"author":                a.Author,
+			"digest":                a.Digest,
+			"content":               content,
+			"thumb_media_id":        cover,
+			"content_source_url":    a.ContentSourceURL,
+			"need_open_comment":     a.NeedOpenComment,
+			"only_fans_can_comment": a.OnlyFansCanComment,
+		}
+	}
+	if coverInfo := encodeCoverInfo(a.CoverInfo); coverInfo != nil {
+		article["cover_info"] = coverInfo
 	}
 	obj, err := w.call(ctx, "/cgi-bin/draft/add", url.Values{"access_token": {token}}, jsonReader(map[string]any{"articles": []any{article}}), "application/json", 60*time.Second, true)
 	if err != nil {
